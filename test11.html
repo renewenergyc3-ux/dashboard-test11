@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PEA Digital Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --pea-purple: #6c2d91;
+            --pea-purple-light: #8e44ad;
+            --pea-gold: #ffc107;
+            --bg-body: #f0f2f5;
+            --card-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: var(--bg-body);
+            margin: 0;
+            color: #333;
+        }
+
+        /* Navbar / Menu Bar */
+        .navbar {
+            background: #fff;
+            padding: 15px 5%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 4px solid var(--pea-purple);
+        }
+
+        .brand { display: flex; align-items: center; gap: 15px; }
+        .brand img { height: 50px; }
+        .brand h1 { font-size: 1.4rem; color: var(--pea-purple); margin: 0; font-weight: 600; }
+
+        .filter-box {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #f8f4ff;
+            padding: 10px 20px;
+            border-radius: 50px;
+            border: 1px solid #ddd;
+        }
+
+        .filter-box label { font-weight: 600; color: var(--pea-purple); }
+        
+        select {
+            border: none;
+            background: transparent;
+            font-family: 'Sarabun';
+            font-size: 1rem;
+            color: #555;
+            outline: none;
+            min-width: 200px;
+            cursor: pointer;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        /* Card Style */
+        .card {
+            background: #fff;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: var(--card-shadow);
+            transition: transform 0.3s ease;
+        }
+
+        .card-header {
+            border-left: 6px solid var(--pea-gold);
+            padding-left: 15px;
+            margin-bottom: 25px;
+        }
+
+        .card-header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+            color: var(--pea-purple);
+        }
+
+        /* Chart Section */
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+
+        /* Table Section */
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 15px;
+            border: 1px solid #eee;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        th {
+            background: #fdfbff;
+            color: var(--pea-purple);
+            padding: 18px;
+            text-align: left;
+            border-bottom: 2px solid #eee;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 15px 18px;
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        tr:hover td {
+            background: #fdf9ff;
+            color: var(--pea-purple-light);
+            font-weight: 400;
+        }
+
+        /* Loading */
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            flex-direction: column;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--pea-purple);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div id="loader">
+    <div class="spinner"></div>
+    <p style="margin-top: 15px; color: var(--pea-purple); font-weight: 600;">กำลังโหลดข้อมูล PEA Dashboard...</p>
+</div>
+
+<div class="navbar">
+    <div class="brand">
+        <img src="https://www.pea.co.th/Portals/0/logo_pea.png" alt="PEA Logo">
+        <h1>ระบบรายงานข้อมูลสถิติรายพื้นที่</h1>
+    </div>
+    <div class="filter-box">
+        <label for="areaFilter">เลือกการไฟฟ้าในพื้นที่ :</label>
+        <select id="areaFilter" onchange="applyFilter()">
+            <option value="ALL">-- แสดงทั้งหมด --</option>
+        </select>
+    </div>
+</div>
+
+<div class="container">
+    <div class="card">
+        <div class="card-header">
+            <h2>สัดส่วนข้อมูลตามสถานะ</h2>
+        </div>
+        <div class="chart-container">
+            <canvas id="statusBarChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2>รายละเอียดรายการข้อมูล</h2>
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr id="tableHead"></tr></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const SHEET_ID = '15SClvSIvKz9o06xrxUkeenAAXSvjn4SRo9Dyx8GCRY0';
+    const URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tq=SELECT%20*`;
+    
+    // คอลัมน์ที่ต้องการแสดง: A=0, B=1, C=2, H=7, I=8, J=9, M=12, O=14
+    const TARGET_COLS = [0, 1, 2, 7, 8, 9, 12, 14];
+    const FILTER_COL_INDEX = 14; // คอลัมน์ O (Index 14) สำหรับ Filter พื้นที่
+
+    let rawData = [];
+    let headers = [];
+    let barChart = null;
+
+    async function init() {
+        try {
+            const res = await fetch(URL);
+            const text = await res.text();
+            const json = JSON.parse(text.substring(47).slice(0, -2));
+            
+            headers = json.table.cols;
+            rawData = json.table.rows;
+
+            populateDropdown();
+            renderHeaders();
+            applyFilter(); // เริ่มการแสดงผลครั้งแรก
+
+            document.getElementById('loader').style.display = 'none';
+        } catch (error) {
+            console.error("Fetch Error:", error);
+            alert("ไม่สามารถดึงข้อมูลได้ กรุณาตรวจสอบลิงก์ Google Sheet และการแชร์");
+        }
+    }
+
+    function populateDropdown() {
+        const select = document.getElementById('areaFilter');
+        // ดึงข้อมูลคอลัมน์ O (Index 14) มาทำเมนู
+        const areas = [...new Set(rawData.map(r => r.c[FILTER_COL_INDEX] ? r.c[FILTER_COL_INDEX].v : ''))]
+                        .filter(v => v !== null && v !== '')
+                        .sort();
+
+        areas.forEach(area => {
+            let opt = document.createElement('option');
+            opt.value = area;
+            opt.innerText = area;
+            select.appendChild(opt);
+        });
+    }
+
+    function renderHeaders() {
+        const tr = document.getElementById('tableHead');
+        TARGET_COLS.forEach(idx => {
+            let th = document.createElement('th');
+            th.innerText = headers[idx] ? headers[idx].label : `ข้อมูล ${idx}`;
+            tr.appendChild(th);
+        });
+    }
+
+    function applyFilter() {
+        const selectedValue = document.getElementById('areaFilter').value;
+        const filteredData = selectedValue === 'ALL' 
+            ? rawData 
+            : rawData.filter(r => (r.c[FILTER_COL_INDEX] ? r.c[FILTER_COL_INDEX].v : '') === selectedValue);
+
+        updateChart(filteredData);
+        updateTable(filteredData);
+    }
+
+    function updateChart(data) {
+        // ใช้คอลัมน์ B (Index 1) มานับสถานะ
+        const stats = {};
+        data.forEach(r => {
+            const status = r.c[1] ? r.c[1].v : 'ไม่ระบุ';
+            stats[status] = (stats[status] || 0) + 1;
+        });
+
+        const ctx = document.getElementById('statusBarChart').getContext('2d');
+        if (barChart) barChart.destroy();
+
+        // สีสำหรับแต่ละสถานะ
+        const colors = ['#6c2d91', '#ffc107', '#00b894', '#0984e3', '#ff7675', '#636e72', '#a29bfe'];
+
+        barChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(stats),
+                datasets: [{
+                    label: 'จำนวนรายการ',
+                    data: Object.values(stats),
+                    backgroundColor: colors,
+                    borderRadius: 10,
+                    barThickness: 40
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#f0f0f0' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    function updateTable(data) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        data.forEach(row => {
+            let tr = document.createElement('tr');
+            TARGET_COLS.forEach(idx => {
+                let td = document.createElement('td');
+                const cell = row.c[idx];
+                td.innerText = cell ? (cell.f ? cell.f : cell.v) : '-';
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    init();
+</script>
+
+</body>
+</html>
